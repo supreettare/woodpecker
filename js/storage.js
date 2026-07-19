@@ -72,13 +72,16 @@ export const store = {
   },
 
   getSettings() {
-    return read(K.settings, {
+    const defaults = {
       perPuzzleLimitSec: 0,   // 0 = no per-puzzle limit (still tracks time)
-      shuffle: false,         // Woodpecker keeps a fixed order across cycles
+      shuffle: true,          // randomize order for each new cycle
       showExplanations: true,
       allowRetry: true,       // let the learner retry after a wrong first move
       sound: true,            // move/capture/success sound effects
-    });
+    };
+    // Merge over defaults so settings saved before a new option existed still
+    // pick up that option's default.
+    return { ...defaults, ...read(K.settings, {}) };
   },
 
   saveSettings(s) {

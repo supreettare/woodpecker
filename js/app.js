@@ -87,12 +87,15 @@ function bindLibraryControls() {
   // Settings
   const s = store.getSettings();
   $('#set-limit').value = s.perPuzzleLimitSec;
+  $('#set-shuffle').checked = s.shuffle !== false;
   $('#set-retry').checked = s.allowRetry;
   $('#set-explain').checked = s.showExplanations;
   $('#set-sound').checked = s.sound !== false;
   sound.setEnabled(s.sound !== false);
   $('#set-limit').addEventListener('change', (e) =>
     store.saveSettings({ perPuzzleLimitSec: Math.max(0, parseInt(e.target.value, 10) || 0) }));
+  $('#set-shuffle').addEventListener('change', (e) =>
+    store.saveSettings({ shuffle: e.target.checked }));
   $('#set-retry').addEventListener('change', (e) =>
     store.saveSettings({ allowRetry: e.target.checked }));
   $('#set-explain').addEventListener('change', (e) =>
