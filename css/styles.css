@@ -65,6 +65,11 @@ h1, h2, h3 { margin: 0 0 .4em; font-weight: 650; }
 .stat-value { font-size: 1.35rem; font-weight: 700; }
 .stat-label { font-size: .78rem; color: var(--muted); }
 .card-actions { display: flex; gap: .6rem; flex-wrap: wrap; margin-top: .6rem; }
+.resume-note {
+  margin: .2rem 0 .7rem; padding: .5rem .7rem; font-size: .85rem;
+  color: var(--accent); background: rgba(79,140,255,.08);
+  border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 8px;
+}
 
 .pill {
   background: var(--panel-2); color: var(--accent);

@@ -114,10 +114,31 @@ function renderLibrary() {
 
     if (cycles.length > 1) card.appendChild(speedChart(cycles));
 
+    // A cycle counts as "in progress" (resumable) only once at least one puzzle
+    // has been completed in it.
+    const inProgress = prog.current && prog.current.index > 0
+      && prog.current.index < (prog.current.order ? prog.current.order.length : meta.count);
+    if (inProgress) {
+      card.appendChild(el('div', 'resume-note',
+        `Cycle ${cycles.length + 1} in progress — resume at puzzle ${prog.current.index + 1} of ${meta.count}.`));
+    }
+
     const actions = el('div', 'card-actions');
-    const startBtn = el('button', 'btn primary', prog.current ? 'Resume cycle' : `Start cycle ${cycles.length + 1}`);
+    const startBtn = el('button', 'btn primary',
+      inProgress ? `Resume at puzzle ${prog.current.index + 1}` : `Start cycle ${cycles.length + 1}`);
     startBtn.addEventListener('click', () => startCycle(meta.id));
     actions.appendChild(startBtn);
+
+    if (inProgress) {
+      const restartBtn = el('button', 'btn', 'Restart cycle');
+      restartBtn.addEventListener('click', () => {
+        if (confirm('Discard progress in the current cycle and start it over from puzzle 1?')) {
+          const p = store.getProgress(meta.id); p.current = null; store.saveProgress(meta.id, p);
+          startCycle(meta.id);
+        }
+      });
+      actions.appendChild(restartBtn);
+    }
 
     const histBtn = el('button', 'btn', 'History');
     histBtn.addEventListener('click', () => showHistory(meta));
@@ -228,17 +249,46 @@ function startCycle(setId) {
   const puzzles = store.getPuzzles(setId);
   if (!puzzles.length) { alert('This set has no puzzles.'); return; }
   const settings = store.getSettings();
-  const ordered = settings.shuffle ? shuffle(puzzles.slice()) : puzzles.slice();
-  session = new Session(ordered, settings);
+  const prog = store.getProgress(setId);
+
+  // Resume an in-progress cycle if one is saved and still valid, otherwise
+  // start a fresh cycle. The saved order is replayed exactly so the learner
+  // continues the same sequence from where they stopped.
+  let ordered = null, resume = null;
+  const cur = prog.current;
+  if (cur && Array.isArray(cur.order) && cur.index > 0 && cur.index < cur.order.length) {
+    const byId = new Map(puzzles.map((p) => [p.id, p]));
+    const seq = cur.order.map((id) => byId.get(id));
+    if (seq.every(Boolean)) {
+      ordered = seq;
+      resume = { index: cur.index, results: cur.results || [], startedAt: cur.startedAt };
+    }
+  }
+  if (!ordered) ordered = settings.shuffle ? shuffle(puzzles.slice()) : puzzles.slice();
+  session = new Session(ordered, settings, resume);
 
   const meta = store.getSet(setId);
-  const prog = store.getProgress(setId);
   $('#trainer-title').textContent = meta.name;
   $('#cycle-label').textContent = `Cycle ${(prog.cycles.length || 0) + 1}`;
+  if (resume) flash(`Resuming at puzzle ${session.number} of ${session.total}.`);
 
+  saveCycleProgress();   // persist the (possibly fresh) in-progress cycle
   showScreen('trainer');
   startCycleTicker();
   loadCurrentPuzzle();
+}
+
+// Persist the in-progress cycle so it can be resumed in a later sitting.
+function saveCycleProgress() {
+  if (!activeSetId || !session) return;
+  const prog = store.getProgress(activeSetId);
+  prog.current = {
+    startedAt: session.startedAt,
+    order: session.puzzles.map((p) => p.id),
+    index: session.index,
+    results: session.results,
+  };
+  store.saveProgress(activeSetId, prog);
 }
 
 function startCycleTicker() {
@@ -458,6 +508,7 @@ function advance() {
   const more = session.next();
   $('#progress-bar-fill').style.width = (session.index / session.total * 100) + '%';
   if (more) {
+    saveCycleProgress();   // checkpoint after every completed puzzle
     loadCurrentPuzzle();
   } else {
     finishCycle();
@@ -586,7 +637,7 @@ function flash(msg) {
 // Quit back to library from within a cycle (progress for the cycle is dropped).
 function bindTrainerNav() {
   $('#quit-cycle').addEventListener('click', () => {
-    if (confirm('Leave this cycle? Progress for the current (unfinished) cycle will not be saved.')) {
+    if (confirm('Leave this cycle? Your progress is saved — you can resume from this puzzle next time.')) {
       clearInterval(cycleTicker);
       clearInterval(puzzleTimer);
       renderLibrary();

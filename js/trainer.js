@@ -10,13 +10,15 @@
 import { Chess } from '../vendor/chess.js';
 
 export class Session {
-  constructor(puzzles, { perPuzzleLimitSec = 0, allowRetry = true } = {}) {
+  constructor(puzzles, { perPuzzleLimitSec = 0, allowRetry = true } = {}, resume = null) {
     this.puzzles = puzzles;
     this.perPuzzleLimitSec = perPuzzleLimitSec;
     this.allowRetry = allowRetry;
-    this.index = 0;
-    this.results = [];        // per-puzzle: {id, ms, correct, attempts, revealed}
-    this.startedAt = new Date().toISOString();
+    // Resume a half-finished cycle: pick up at the next unsolved puzzle with the
+    // already-accumulated results and start time restored.
+    this.index = resume ? resume.index : 0;
+    this.results = resume ? resume.results.slice() : []; // per-puzzle: {id, ms, correct, attempts, revealed}
+    this.startedAt = resume ? resume.startedAt : new Date().toISOString();
     this._puzzleStart = 0;
     this._attempts = 0;
     this._firstWrong = false;
