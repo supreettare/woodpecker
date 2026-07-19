@@ -391,12 +391,20 @@ async function onMove(from, to) {
   await handleResult(res, from, to);
 }
 
-// Slide `move` on the board, then snap to the exact resulting FEN and play its
-// sound. The board DOM must still show the position before `move`.
-async function animateAndPlace(move, fenAfter) {
+// Pacing (ms) for move playback. The pause before the opponent's reply is what
+// gives your eye time to register your own move before theirs happens.
+const PLAYER_SLIDE = 190;
+const REPLY_PAUSE = 480;   // beat between your move landing and the reply starting
+const REPLY_SLIDE = 300;   // the opponent's move slides a bit slower, to read clearly
+
+// Slide `move` on the board, then snap to the exact resulting FEN, highlight the
+// squares, and play its sound. The board DOM must still show the position
+// before `move`.
+async function animateAndPlace(move, fenAfter, { ms = PLAYER_SLIDE } = {}) {
   if (!move) { if (fenAfter) board.setPosition(fenAfter); return; }
-  await board.animateMove(move.from, move.to);
+  await board.animateMove(move.from, move.to, ms);
   board.setPosition(fenAfter);
+  board.markLastMove(move.from, move.to);
   moveSound(move);
 }
 
@@ -426,11 +434,17 @@ async function handleResult(res, from, to) {
   if (res.status === 'progress' || res.status === 'solved') {
     board.setInteractive(false);
     board.clearMarks();
-    // Animate the player's move, then the opponent's reply (if any).
+    // Animate your move and let it land + highlight, then pause so you register
+    // it before the opponent replies with its own (slightly slower) animation,
+    // fresh highlight, and sound — so it's easy to see what moved.
     await animateAndPlace(res.playerMove, res.afterPlayerFen);
-    if (res.reply) { await sleep(70); await animateAndPlace(res.reply, res.finalFen); }
-    const last = res.reply || res.playerMove;
-    board.markLastMove(last.from, last.to);
+    if (res.reply) {
+      await sleep(REPLY_PAUSE);
+      board.clearMarks();
+      await animateAndPlace(res.reply, res.finalFen, { ms: REPLY_SLIDE });
+      board.pulse(res.reply.to);   // gentle emphasis on the opponent's landing square
+      await sleep(120);
+    }
 
     if (res.status === 'progress') {
       feedback('good', 'Correct — keep going.');
@@ -485,15 +499,15 @@ function doReveal() {
       return;
     }
     const uci = line[i++];
-    await board.animateMove(uci.slice(0, 2), uci.slice(2, 4));
-    const mv = session.game.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] });
     board.clearMarks();
+    await board.animateMove(uci.slice(0, 2), uci.slice(2, 4), 260);
+    const mv = session.game.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] });
     board.setPosition(session.game.fen());
     if (mv) {
       board.markLastMove(mv.from, mv.to);
       moveSound({ capture: mv.san.includes('x'), check: /[+#]/.test(mv.san) });
     }
-    setTimeout(step, 380);
+    setTimeout(step, 500);
   };
   feedback('bad', 'Here is the solution line:');
   step();
