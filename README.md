@@ -195,7 +195,18 @@ in checkmate). Point it at your own JSON file to validate it before importing.
 - [`chess.js`](https://github.com/jhlywa/chess.js) (BSD-2-Clause) is vendored in
   `vendor/` for move legality and SAN/UCI conversion — the only third-party
   dependency.
-- The board is a small self-contained renderer (`js/board.js`); no board
-  library, no external images (Unicode piece glyphs).
+- The board is a small self-contained renderer (`js/board.js`) with inline SVG
+  pieces (`js/pieces.js`); no board library, no external image files.
+- Move/capture/success sounds are synthesized with the Web Audio API
+  (`js/sound.js`) — no audio files.
 - Data model and persistence: `js/storage.js`. Session/scoring engine:
   `js/trainer.js`. Import parsers: `js/import.js`. UI: `js/app.js`.
+
+## License
+
+This project is released under the **MIT License** — see [`LICENSE`](LICENSE).
+
+Third-party components keep their own licenses:
+- **chess.js** (`vendor/`) — BSD-2-Clause (`vendor/LICENSE-chess.js`).
+- **Bundled puzzle data** (`data/woodpecker-*.json`) — derived from the Lichess
+  puzzle database, released into the public domain under **CC0 1.0**.
