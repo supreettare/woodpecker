@@ -25,12 +25,37 @@ let cycleTicker = null;
 // ---------------------------------------------------------------------------
 // Boot
 // ---------------------------------------------------------------------------
-function boot() {
+async function boot() {
   board = new Board($('#board'), { onMove });
   board.setPosition('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1');
   bindLibraryControls();
+  await ensureDefaultSet();
   renderLibrary();
   showScreen('library');
+}
+
+const DEFAULT_SET_ID = 'set-woodpecker-1000';
+const DEFAULT_SET_URL = './data/woodpecker-1000.json';
+
+// On first run, load the bundled 1000-puzzle Woodpecker set so training can
+// start immediately. Runs only when there are no sets yet, so a user who has
+// deleted it isn't nagged (they can re-add it from the button).
+async function ensureDefaultSet() {
+  if (store.listSets().length) return;
+  await loadDefaultSet(true);
+}
+
+async function loadDefaultSet(silent) {
+  try {
+    const res = await fetch(DEFAULT_SET_URL);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const parsed = parseFile('woodpecker-1000.json', await res.text());
+    store.addSet({ id: DEFAULT_SET_ID, name: parsed.name, puzzles: parsed.puzzles });
+    renderLibrary();
+    if (!silent) flash(`Loaded the Woodpecker 1000 set (${parsed.puzzles.length} puzzles).`);
+  } catch (err) {
+    if (!silent) alert('Could not load the Woodpecker 1000 set: ' + err.message);
+  }
 }
 
 function showScreen(name) {
@@ -42,6 +67,7 @@ function showScreen(name) {
 // ---------------------------------------------------------------------------
 function bindLibraryControls() {
   $('#file-input').addEventListener('change', onFilePicked);
+  $('#load-default').addEventListener('click', () => loadDefaultSet(false));
   $('#load-sample').addEventListener('click', loadSample);
   $('#export-all').addEventListener('click', exportBackup);
   $('#import-backup').addEventListener('change', importBackup);

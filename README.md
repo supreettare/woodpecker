@@ -5,11 +5,17 @@ fixed set of puzzles, then repeat the *same* set again and again — faster each
 cycle — until the patterns become automatic. Built for one learner on one
 device, with time tracking, scoring, and a speed-up chart across repetitions.
 
-> **Bring your own puzzles.** This app ships **no** puzzle-book content. It's an
-> empty trainer: you import a puzzle file you have the right to use (a set you
-> own, a free [Lichess](https://database.lichess.org/#puzzles) export, your
-> coach's PGN, etc.). A tiny sample set of generic teaching positions is
-> included just so the app works on first launch.
+> **Comes with a ready-made 1000-puzzle set.** On first launch the app loads
+> **Woodpecker 1000** — a fixed set of 1000 real tactical puzzles drawn from the
+> **public-domain (CC0)** [Lichess puzzle database](https://database.lichess.org/#puzzles),
+> filtered to a challenge band around 1400 (ratings 1300–1600, mixed themes,
+> unpredictable order — just like the Woodpecker book's design). It is **not**
+> affiliated with, and contains none of the content of, the *Woodpecker Method*
+> book; it's an independent set built from freely-licensed puzzles.
+>
+> You can also **bring your own puzzles** — import any JSON / Lichess CSV / PGN
+> file you have the right to use (a set you own, a bigger Lichess export at a
+> different rating, your coach's PGN, etc.).
 
 ---
 
@@ -140,6 +146,18 @@ Checks every puzzle's line for legality (and that "mate" puzzles actually end
 in checkmate). Point it at your own JSON file to validate it before importing.
 
 ---
+
+## Data & licensing
+
+- **Woodpecker 1000** (`data/woodpecker-1000.json`) is built from the
+  [Lichess puzzle database](https://database.lichess.org/#puzzles), which Lichess
+  releases into the public domain under **CC0 1.0**. The puzzles here were
+  selected and reformatted from a CC0 sample; they carry no additional
+  restrictions. This project is independent and not affiliated with the
+  *Woodpecker Method* book or its publisher.
+- `chess.js` in `vendor/` is BSD-2-Clause (see `vendor/LICENSE-chess.js`).
+- Anything you import yourself is yours to manage — the app stores it only in
+  your own browser.
 
 ## Tech notes
 
