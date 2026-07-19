@@ -87,13 +87,12 @@
   <!-- ============================ TRAINER ============================ -->
   <section class="screen" data-screen="trainer">
     <header class="topbar trainer-bar">
-      <button id="quit-cycle" class="btn ghost">← Library</button>
-      <div class="trainer-heading">
-        <h2 id="trainer-title">Set</h2>
-        <span id="cycle-label" class="pill">Cycle 1</span>
-      </div>
+      <button id="quit-cycle" class="btn ghost back-btn" aria-label="Back to library">
+        <span class="back-arrow">←</span><span class="back-text">Library</span>
+      </button>
+      <h2 id="trainer-title" class="trainer-title">Set</h2>
       <div class="cycle-clock">
-        <span class="clock-label">Cycle time</span>
+        <span id="cycle-label" class="clock-label">Cycle 1</span>
         <span id="cycle-timer" class="clock">0:00</span>
       </div>
     </header>

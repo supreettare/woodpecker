@@ -43,9 +43,16 @@ h1, h2, h3 { margin: 0 0 .4em; font-weight: 650; }
   border-bottom: 1px solid var(--line);
 }
 .brand { display: flex; align-items: center; gap: .9rem; }
-.logo { font-size: 2rem; }
-.topbar h1 { font-size: 1.4rem; margin: 0; }
-.tagline { margin: 0; color: var(--muted); font-size: .9rem; }
+.logo { font-size: 2rem; line-height: 1; flex-shrink: 0; }
+.topbar h1 { font-size: 1.4rem; margin: 0; line-height: 1.15; }
+.tagline { margin: .15rem 0 0; color: var(--muted); font-size: .9rem; }
+
+@media (max-width: 600px) {
+  .topbar { padding: .8rem 1rem; gap: .7rem; }
+  .logo { font-size: 1.6rem; }
+  .topbar h1 { font-size: 1.2rem; }
+  .tagline { font-size: .82rem; }
+}
 
 /* ---- Library layout ---- */
 .container {
@@ -114,12 +121,24 @@ h1, h2, h3 { margin: 0 0 .4em; font-weight: 650; }
 .chart-cap { font-size: .75rem; color: var(--muted); margin-top: .2rem; }
 
 /* ---- Trainer ---- */
-.trainer-bar { justify-content: space-between; }
-.trainer-heading { display: flex; align-items: center; gap: .8rem; }
-.trainer-heading h2 { margin: 0; font-size: 1.15rem; }
-.cycle-clock { text-align: right; }
-.clock-label { display: block; font-size: .72rem; color: var(--muted); }
-.clock { font-size: 1.5rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.trainer-bar { justify-content: space-between; gap: .75rem; padding: .7rem 1rem; }
+.back-btn { flex-shrink: 0; padding: .4rem .6rem; gap: .3rem; }
+.back-arrow { font-size: 1.1rem; }
+.trainer-title {
+  margin: 0; font-size: 1.05rem; font-weight: 650; text-align: center;
+  flex: 1 1 auto; min-width: 0;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.cycle-clock { flex-shrink: 0; text-align: right; line-height: 1.1; }
+.clock-label { display: block; font-size: .7rem; color: var(--muted); }
+.clock { font-size: 1.25rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+@media (max-width: 560px) {
+  .back-text { display: none; }            /* icon-only back button on phones */
+  .trainer-bar { padding: .6rem .7rem; gap: .5rem; }
+  .trainer-title { font-size: .98rem; }
+  .clock { font-size: 1.15rem; }
+}
 
 .trainer-layout {
   max-width: 1080px; margin: 0 auto; padding: 1.4rem;

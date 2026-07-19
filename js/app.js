@@ -41,9 +41,16 @@ async function boot() {
   board = new Board($('#board'), { onMove });
   board.setPosition('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1');
   bindLibraryControls();
+  migrateNames();
   await ensureDefaultSet();
   renderLibrary();
   showScreen('library');
+}
+
+// Shorten the previously-verbose default set name for existing users.
+function migrateNames() {
+  const s = store.getSet(DEFAULT_SET_ID);
+  if (s && /Lichess CC0/.test(s.name)) store.renameSet(DEFAULT_SET_ID, 'Woodpecker 1000');
 }
 
 const DEFAULT_SET_ID = 'set-woodpecker-1000';
