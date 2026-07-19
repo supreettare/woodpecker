@@ -88,6 +88,7 @@ function bindLibraryControls() {
   const s = store.getSettings();
   $('#set-limit').value = s.perPuzzleLimitSec;
   $('#set-shuffle').checked = s.shuffle !== false;
+  $('#set-autoadvance').checked = s.autoAdvance !== false;
   $('#set-retry').checked = s.allowRetry;
   $('#set-explain').checked = s.showExplanations;
   $('#set-sound').checked = s.sound !== false;
@@ -96,6 +97,8 @@ function bindLibraryControls() {
     store.saveSettings({ perPuzzleLimitSec: Math.max(0, parseInt(e.target.value, 10) || 0) }));
   $('#set-shuffle').addEventListener('change', (e) =>
     store.saveSettings({ shuffle: e.target.checked }));
+  $('#set-autoadvance').addEventListener('change', (e) =>
+    store.saveSettings({ autoAdvance: e.target.checked }));
   $('#set-retry').addEventListener('change', (e) =>
     store.saveSettings({ allowRetry: e.target.checked }));
   $('#set-explain').addEventListener('change', (e) =>
@@ -324,6 +327,8 @@ function startCycleTicker() {
 }
 
 function loadCurrentPuzzle() {
+  clearTimeout(autoAdvanceTimer);
+  autoAdvanceTimer = null;
   clearFeedback();
   board.clearMarks();
   board.setInteractive(false);
@@ -462,6 +467,12 @@ async function handleResult(res, from, to) {
       feedback('good', clean ? '✅ Solved!' : '✅ Solved (after a slip).');
       showExplanation();
       showContinue();
+      // Auto-load the next puzzle after a short beat (the Next button stays
+      // visible so it can still be tapped to skip ahead immediately).
+      if (store.getSettings().autoAdvance !== false && session.hasNext()) {
+        const hasExpl = !$('#explanation').classList.contains('hidden');
+        scheduleAutoAdvance(hasExpl ? 1600 : 850);
+      }
     }
     return;
   }
@@ -559,7 +570,20 @@ function showContinue() {
   b.focus();
 }
 
+let autoAdvanceTimer = null;
+let advancing = false;
+
+// Schedule an automatic advance to the next puzzle after `ms`.
+function scheduleAutoAdvance(ms) {
+  clearTimeout(autoAdvanceTimer);
+  autoAdvanceTimer = setTimeout(() => { autoAdvanceTimer = null; advance(); }, ms);
+}
+
 function advance() {
+  if (advancing) return;           // guard against a manual tap racing the timer
+  advancing = true;
+  clearTimeout(autoAdvanceTimer);
+  autoAdvanceTimer = null;
   const more = session.next();
   $('#progress-bar-fill').style.width = (session.index / session.total * 100) + '%';
   if (more) {
@@ -568,6 +592,7 @@ function advance() {
   } else {
     finishCycle();
   }
+  advancing = false;
 }
 
 function finishCycle() {
@@ -695,6 +720,8 @@ function bindTrainerNav() {
     if (confirm('Leave this cycle? Your progress is saved — you can resume from this puzzle next time.')) {
       clearInterval(cycleTicker);
       clearInterval(puzzleTimer);
+      clearTimeout(autoAdvanceTimer);
+      autoAdvanceTimer = null;
       renderLibrary();
       showScreen('library');
     }

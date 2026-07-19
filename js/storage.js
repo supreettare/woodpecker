@@ -78,6 +78,7 @@ export const store = {
       showExplanations: true,
       allowRetry: true,       // let the learner retry after a wrong first move
       sound: true,            // move/capture/success sound effects
+      autoAdvance: true,      // auto-load the next puzzle after solving
     };
     // Merge over defaults so settings saved before a new option existed still
     // pick up that option's default.
