@@ -112,6 +112,11 @@ h1, h2, h3 { margin: 0 0 .4em; font-weight: 650; }
 .btn.ghost { background: transparent; border-color: transparent; }
 .btn.ghost:hover { background: var(--panel-2); }
 .btn.block { display: flex; width: 100%; margin-top: .5rem; }
+.btn.subtle { background: transparent; color: var(--muted); border-style: dashed; }
+.btn.subtle:hover { border-color: var(--line); }
+.btn:disabled { cursor: default; opacity: .8; }
+.btn:disabled:hover { border-color: var(--line); }
+#default-set-buttons { margin-bottom: .3rem; }
 
 /* ---- Charts ---- */
 .chart { margin: .6rem 0; }

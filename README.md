@@ -5,13 +5,21 @@ fixed set of puzzles, then repeat the *same* set again and again — faster each
 cycle — until the patterns become automatic. Built for one learner on one
 device, with time tracking, scoring, and a speed-up chart across repetitions.
 
-> **Comes with a ready-made 1000-puzzle set.** On first launch the app loads
-> **Woodpecker 1000** — a fixed set of 1000 real tactical puzzles drawn from the
-> **public-domain (CC0)** [Lichess puzzle database](https://database.lichess.org/#puzzles),
-> filtered to a challenge band around 1400 (ratings 1300–1600, mixed themes,
-> unpredictable order — just like the Woodpecker book's design). It is **not**
-> affiliated with, and contains none of the content of, the *Woodpecker Method*
-> book; it's an independent set built from freely-licensed puzzles.
+> **Comes with three ready-made 1000-puzzle sets, by level.** On first launch the
+> app loads three independent sets of real tactical puzzles drawn from the
+> **public-domain (CC0)** [Lichess puzzle database](https://database.lichess.org/#puzzles):
+>
+> | Set | Rating band | Character |
+> |-----|-------------|-----------|
+> | **Beginner** | 600–1000 | almost all one-move puzzles (mostly mate-in-1) — for players just starting out |
+> | **Intermediate** | 1300–1600 | mixed themes, ~1–2 move tactics |
+> | **Advanced** | 1600–2000 | multi-move combinations for stronger players |
+>
+> Each set is loaded and **tracked separately** (its own cycles, times, accuracy,
+> and resume point), so different players can train different sets on the same
+> device. These are **not** affiliated with, and contain none of the content of,
+> the *Woodpecker Method* book — they're independent sets built from
+> freely-licensed puzzles.
 >
 > You can also **bring your own puzzles** — import any JSON / Lichess CSV / PGN
 > file you have the right to use (a set you own, a bigger Lichess export at a

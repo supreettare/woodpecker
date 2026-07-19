@@ -47,33 +47,58 @@ async function boot() {
   showScreen('library');
 }
 
-// Shorten the previously-verbose default set name for existing users.
+// The bundled sets, ordered easiest → hardest. Each is loaded and tracked
+// independently in the library.
+const DEFAULT_SETS = [
+  { id: 'set-woodpecker-beginner', file: 'woodpecker-beginner-1000.json', name: 'Beginner · 600–1000' },
+  { id: 'set-woodpecker-1000', file: 'woodpecker-1000.json', name: 'Intermediate · 1300–1600' },
+  { id: 'set-woodpecker-advanced', file: 'woodpecker-advanced-1000.json', name: 'Advanced · 1600–2000' },
+];
+const DEFAULT_SET_ID = 'set-woodpecker-1000'; // kept for backward-compatible migration
+
+// Give existing users' stored intermediate set the new clearer name.
 function migrateNames() {
   const s = store.getSet(DEFAULT_SET_ID);
-  if (s && /Lichess CC0/.test(s.name)) store.renameSet(DEFAULT_SET_ID, 'Woodpecker 1000');
+  if (s && /Lichess CC0|^Woodpecker 1000$/.test(s.name)) {
+    store.renameSet(DEFAULT_SET_ID, 'Intermediate · 1300–1600');
+  }
 }
 
-const DEFAULT_SET_ID = 'set-woodpecker-1000';
-const DEFAULT_SET_URL = './data/woodpecker-1000.json';
-
-// On first run, load the bundled 1000-puzzle Woodpecker set so training can
-// start immediately. Runs only when there are no sets yet, so a user who has
-// deleted it isn't nagged (they can re-add it from the button).
+// On first run (no sets yet), load all three bundled sets so the parent can
+// pick the right level per child immediately. Fetch/parse (async) happens
+// first, then the sets are written in one synchronous batch so their shared
+// index can't be clobbered by an interleaved write.
+let ensuring = false;
 async function ensureDefaultSet() {
-  if (store.listSets().length) return;
-  await loadDefaultSet(true);
+  if (ensuring || store.listSets().length) return;
+  ensuring = true;
+  const ready = [];
+  for (const def of DEFAULT_SETS) {
+    try {
+      const res = await fetch('./data/' + def.file);
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const parsed = parseFile(def.file, await res.text());
+      ready.push({ def, puzzles: parsed.puzzles });
+    } catch { /* skip a set that fails to load; others still load */ }
+  }
+  for (const { def, puzzles } of ready) {
+    if (!store.getSet(def.id)) store.addSet({ id: def.id, name: def.name, puzzles });
+  }
+  renderLibrary();
+  ensuring = false;
 }
 
-async function loadDefaultSet(silent) {
+async function loadBundledSet(def, silent) {
   try {
-    const res = await fetch(DEFAULT_SET_URL);
+    if (store.getSet(def.id)) { if (!silent) flash(`"${def.name}" is already loaded.`); return; }
+    const res = await fetch('./data/' + def.file);
     if (!res.ok) throw new Error('HTTP ' + res.status);
-    const parsed = parseFile('woodpecker-1000.json', await res.text());
-    store.addSet({ id: DEFAULT_SET_ID, name: parsed.name, puzzles: parsed.puzzles });
+    const parsed = parseFile(def.file, await res.text());
+    store.addSet({ id: def.id, name: def.name, puzzles: parsed.puzzles });
     renderLibrary();
-    if (!silent) flash(`Loaded the Woodpecker 1000 set (${parsed.puzzles.length} puzzles).`);
+    if (!silent) flash(`Loaded "${def.name}" (${parsed.puzzles.length} puzzles).`);
   } catch (err) {
-    if (!silent) alert('Could not load the Woodpecker 1000 set: ' + err.message);
+    if (!silent) alert(`Could not load "${def.name}": ` + err.message);
   }
 }
 
@@ -86,8 +111,8 @@ function showScreen(name) {
 // ---------------------------------------------------------------------------
 function bindLibraryControls() {
   $('#file-input').addEventListener('change', onFilePicked);
-  $('#load-default').addEventListener('click', () => loadDefaultSet(false));
   $('#load-sample').addEventListener('click', loadSample);
+  renderDefaultSetButtons();
   $('#export-all').addEventListener('click', exportBackup);
   $('#import-backup').addEventListener('change', importBackup);
 
@@ -117,7 +142,23 @@ function bindLibraryControls() {
   });
 }
 
+// One load button per bundled set, reflecting whether it's already loaded.
+function renderDefaultSetButtons() {
+  const wrap = $('#default-set-buttons');
+  if (!wrap) return;
+  wrap.innerHTML = '';
+  DEFAULT_SETS.forEach((def) => {
+    const loaded = !!store.getSet(def.id);
+    const b = el('button', 'btn block ' + (loaded ? 'subtle' : 'primary'));
+    b.textContent = loaded ? `✓ ${def.name}` : `Load ${def.name}`;
+    if (loaded) b.disabled = true;
+    else b.addEventListener('click', () => loadBundledSet(def, false));
+    wrap.appendChild(b);
+  });
+}
+
 function renderLibrary() {
+  renderDefaultSetButtons();
   const wrap = $('#set-list');
   wrap.innerHTML = '';
   const sets = store.listSets();

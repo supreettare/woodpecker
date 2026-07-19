@@ -35,12 +35,13 @@
             Import your own puzzle file. Supported: <b>JSON</b> (native format),
             <b>CSV</b> (Lichess puzzle export), or <b>PGN</b> (games/puzzles with FEN tags).
           </p>
-          <button id="load-default" class="btn primary block">Load Woodpecker 1000 set</button>
+          <p class="muted small">Ready-made sets by level (each tracked separately):</p>
+          <div id="default-set-buttons"></div>
           <label class="btn block">
-            Import puzzle file
+            Import your own puzzle file
             <input id="file-input" type="file" accept=".json,.csv,.pgn,.txt" hidden />
           </label>
-          <button id="load-sample" class="btn block">Load small sample set</button>
+          <button id="load-sample" class="btn block subtle">Load small sample set</button>
         </div>
 
         <div class="panel">
