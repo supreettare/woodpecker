@@ -6,6 +6,17 @@ import { pieceSVG } from './pieces.js';
 import { parseFile } from './import.js';
 import { store } from './storage.js';
 import { Session, fmtTime } from './trainer.js';
+import { sound } from './sound.js';
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// Play the appropriate sound for a move based on its capture/check flags.
+function moveSound(move) {
+  if (!move) return;
+  if (move.check) sound.check();
+  else if (move.capture) sound.capture();
+  else sound.move();
+}
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -78,12 +89,19 @@ function bindLibraryControls() {
   $('#set-limit').value = s.perPuzzleLimitSec;
   $('#set-retry').checked = s.allowRetry;
   $('#set-explain').checked = s.showExplanations;
+  $('#set-sound').checked = s.sound !== false;
+  sound.setEnabled(s.sound !== false);
   $('#set-limit').addEventListener('change', (e) =>
     store.saveSettings({ perPuzzleLimitSec: Math.max(0, parseInt(e.target.value, 10) || 0) }));
   $('#set-retry').addEventListener('change', (e) =>
     store.saveSettings({ allowRetry: e.target.checked }));
   $('#set-explain').addEventListener('change', (e) =>
     store.saveSettings({ showExplanations: e.target.checked }));
+  $('#set-sound').addEventListener('change', (e) => {
+    store.saveSettings({ sound: e.target.checked });
+    sound.setEnabled(e.target.checked);
+    if (e.target.checked) { sound.unlock(); sound.move(); } // preview + prime audio
+  });
 }
 
 function renderLibrary() {
@@ -316,27 +334,30 @@ function loadCurrentPuzzle() {
   $('#puzzle-rating').textContent = p.rating ? `Rating ${p.rating}` : '';
 
   board.setOrientation(info.orientation);
-  board.setPosition(info.fen);
+  // For opponent-first puzzles, show the position BEFORE the setup move so we
+  // can animate that move sliding in.
+  board.setPosition(info.setupMove ? info.preSetupFen : info.fen);
 
   const toMove = info.sideToMove === 'w' ? 'White' : 'Black';
   $('#side-to-move').textContent = `${toMove} to move`;
   $('#side-to-move').className = 'side-to-move ' + (info.sideToMove === 'w' ? 'white' : 'black');
 
-  const go = () => {
+  const go = async () => {
     board.clearMarks();
-    if (info.setupMove) board.markLastMove(info.setupMove.from, info.setupMove.to);
+    if (info.setupMove) {
+      await sleep(280);
+      await board.animateMove(info.setupMove.from, info.setupMove.to);
+      board.setPosition(info.fen);
+      board.markLastMove(info.setupMove.from, info.setupMove.to);
+      moveSound(info.setupMove);
+    }
     board.setInteractive(true);
     // Start the clock when the learner actually gets control, so the setup
     // animation delay isn't charged to them.
     session._puzzleStart = performance.now();
     armPuzzleTimer();
   };
-  if (info.setupMove) {
-    // Briefly show the setup move landing before handing over control.
-    setTimeout(go, 500);
-  } else {
-    go();
-  }
+  go();
 }
 
 function armPuzzleTimer() {
@@ -367,7 +388,16 @@ async function onMove(from, to) {
     if (!promotion) return;
   }
   const res = session.tryMove(from, to, promotion);
-  handleResult(res, from, to);
+  await handleResult(res, from, to);
+}
+
+// Slide `move` on the board, then snap to the exact resulting FEN and play its
+// sound. The board DOM must still show the position before `move`.
+async function animateAndPlace(move, fenAfter) {
+  if (!move) { if (fenAfter) board.setPosition(fenAfter); return; }
+  await board.animateMove(move.from, move.to);
+  board.setPosition(fenAfter);
+  moveSound(move);
 }
 
 // Floating piece picker shown over the board for pawn promotions.
@@ -390,36 +420,40 @@ function askPromotion(color) {
   });
 }
 
-function handleResult(res, from, to) {
+async function handleResult(res, from, to) {
   if (res.status === 'illegal') return; // silently ignore illegal drops
 
-  if (res.status === 'progress') {
-    board.clearMarks();
-    board.setPosition(session.game.fen());
-    if (res.reply) board.markLastMove(res.reply.from, res.reply.to);
-    feedback('good', 'Correct — keep going.');
-    return;
-  }
-
-  if (res.status === 'solved') {
-    clearInterval(puzzleTimer);
-    board.clearMarks();
-    board.setPosition(session.game.fen());
-    if (res.reply) board.markLastMove(res.reply.from, res.reply.to);
-    board.mark(to, 'cb-good');
+  if (res.status === 'progress' || res.status === 'solved') {
     board.setInteractive(false);
-    const first = session.results[session.results.length - 1];
-    const clean = first && first.correct;
-    feedback('good', clean ? '✅ Solved!' : '✅ Solved (after a slip).');
-    showExplanation();
-    showContinue();
+    board.clearMarks();
+    // Animate the player's move, then the opponent's reply (if any).
+    await animateAndPlace(res.playerMove, res.afterPlayerFen);
+    if (res.reply) { await sleep(70); await animateAndPlace(res.reply, res.finalFen); }
+    const last = res.reply || res.playerMove;
+    board.markLastMove(last.from, last.to);
+
+    if (res.status === 'progress') {
+      feedback('good', 'Correct — keep going.');
+      board.setInteractive(true);
+    } else {
+      clearInterval(puzzleTimer);
+      board.mark(res.playerMove.to, 'cb-good');
+      board.pulse(res.playerMove.to);
+      const first = session.results[session.results.length - 1];
+      const clean = first && first.correct;
+      sound.success();
+      feedback('good', clean ? '✅ Solved!' : '✅ Solved (after a slip).');
+      showExplanation();
+      showContinue();
+    }
     return;
   }
 
   if (res.status === 'wrong') {
+    sound.error();
     board.mark(to, 'cb-bad');
     setTimeout(() => board.clearMarks(), 500);
-    board.setPosition(session.game.fen()); // revert the illegal-for-solution move
+    board.setPosition(session.game.fen()); // snap piece back (move wasn't applied)
     const msg = `✗ ${res.playedSan} isn't the solution here.`;
     if (res.canRetry) {
       feedback('bad', msg + ' Try again, or reveal the answer.');
@@ -444,18 +478,22 @@ function doReveal() {
   const line = session.reveal();
   board.setInteractive(false);
   let i = 0;
-  const step = () => {
+  const step = async () => {
     if (i >= line.length) {
       showExplanation();
       showContinue();
       return;
     }
     const uci = line[i++];
+    await board.animateMove(uci.slice(0, 2), uci.slice(2, 4));
     const mv = session.game.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] });
     board.clearMarks();
     board.setPosition(session.game.fen());
-    if (mv) board.markLastMove(mv.from, mv.to);
-    setTimeout(step, 650);
+    if (mv) {
+      board.markLastMove(mv.from, mv.to);
+      moveSound({ capture: mv.san.includes('x'), check: /[+#]/.test(mv.san) });
+    }
+    setTimeout(step, 380);
   };
   feedback('bad', 'Here is the solution line:');
   step();
@@ -649,6 +687,8 @@ function bindTrainerNav() {
 document.addEventListener('DOMContentLoaded', () => {
   boot();
   bindTrainerNav();
+  // Browsers block audio until a user gesture; prime the context on first tap.
+  window.addEventListener('pointerdown', () => sound.unlock(), { once: true });
   document.addEventListener('keydown', (e) => {
     if ((e.key === 'Enter' || e.key === ' ') && $('#control-slot').firstChild) {
       // let the focused button handle it; nothing extra needed

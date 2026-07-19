@@ -48,6 +48,7 @@ export class Session {
     this._puzzleStart = performance.now();
 
     let setupMove = null;
+    const preSetupFen = this.game.fen();   // position before the opponent's setup move
     if (p.sideFirst === 'opponent') {
       const uci = p.solution[0];
       setupMove = this._applyUci(uci);
@@ -56,6 +57,7 @@ export class Session {
     this.solverColor = this.game.turn();
     return {
       fen: this.game.fen(),
+      preSetupFen,
       orientation: this.solverColor,
       setupMove,               // {from,to} played automatically, or null
       sideToMove: this.solverColor,
@@ -68,7 +70,11 @@ export class Session {
       to: uci.slice(2, 4),
       promotion: uci.length > 4 ? uci[4] : undefined,
     });
-    return mv ? { from: mv.from, to: mv.to, san: mv.san, lan: mv.lan } : null;
+    if (!mv) return null;
+    return {
+      from: mv.from, to: mv.to, san: mv.san, lan: mv.lan,
+      capture: !!mv.captured, check: this.game.isCheck(),
+    };
   }
 
   // Is the given from/to (with optional promotion) even a legal move here?
@@ -108,18 +114,22 @@ export class Session {
     const isMate = mv && trial.isCheckmate();
 
     if (matches || isMate) {
-      this._applyUci(playedNorm);
+      const playerMove = this._applyUci(playedNorm);
       this.ply++;
+      const afterPlayerFen = this.game.fen();
       // Play the opponent's scripted reply, if any.
       if (this.ply < this.current.solution.length && !this.game.isGameOver()) {
         const reply = this._applyUci(this.current.solution[this.ply]);
         this.ply++;
+        const payload = { playerMove, afterPlayerFen, reply, finalFen: this.game.fen() };
         if (this.ply >= this.current.solution.length || this.game.isGameOver()) {
-          return this._finish(true, { status: 'solved', reply });
+          return this._finish(true, { status: 'solved', ...payload });
         }
-        return { status: 'progress', reply, fen: this.game.fen(), done: false };
+        return { status: 'progress', ...payload, done: false };
       }
-      return this._finish(true, { status: 'solved', reply: null });
+      return this._finish(true, {
+        status: 'solved', playerMove, afterPlayerFen, reply: null, finalFen: this.game.fen(),
+      });
     }
 
     // Legal but wrong.

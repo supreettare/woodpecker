@@ -137,6 +137,46 @@ export class Board {
     if (to && this.squares[to]) this.squares[to].classList.add('cb-last');
   }
 
+  // Slide the piece currently sitting on `from` to the `to` square. The DOM must
+  // still reflect the pre-move position; the caller calls setPosition() after
+  // this resolves to finalize. Returns a Promise that resolves when done.
+  animateMove(from, to, ms = 190) {
+    return new Promise((resolve) => {
+      const fromSq = this.squares[from];
+      const toSq = this.squares[to];
+      const pieceEl = fromSq && fromSq.querySelector('.cb-piece');
+      if (!pieceEl || !toSq) { resolve(); return; }
+      const a = fromSq.getBoundingClientRect();
+      const b = toSq.getBoundingClientRect();
+      const dx = b.left - a.left, dy = b.top - a.top;
+      let done = false;
+      const finish = () => {
+        if (done) return; done = true;
+        pieceEl.style.transition = '';
+        pieceEl.style.transform = '';
+        pieceEl.style.zIndex = '';
+        resolve();
+      };
+      pieceEl.style.zIndex = '25';
+      pieceEl.style.transition = `transform ${ms}ms cubic-bezier(.22,.61,.36,1)`;
+      // Force a frame so the transition applies, then move.
+      requestAnimationFrame(() => {
+        pieceEl.style.transform = `translate(${dx}px, ${dy}px)`;
+      });
+      pieceEl.addEventListener('transitionend', finish, { once: true });
+      setTimeout(finish, ms + 120); // fallback if transitionend doesn't fire
+    });
+  }
+
+  // Briefly pulse a square (used to celebrate a solved puzzle).
+  pulse(square) {
+    const el = this.squares[square];
+    if (!el) return;
+    el.classList.remove('cb-pulse');
+    void el.offsetWidth; // restart animation
+    el.classList.add('cb-pulse');
+  }
+
   _clearSelection() {
     if (this.selected && this.squares[this.selected]) {
       this.squares[this.selected].classList.remove('cb-sel');

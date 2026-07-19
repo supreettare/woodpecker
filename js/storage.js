@@ -77,6 +77,7 @@ export const store = {
       shuffle: false,         // Woodpecker keeps a fixed order across cycles
       showExplanations: true,
       allowRetry: true,       // let the learner retry after a wrong first move
+      sound: true,            // move/capture/success sound effects
     });
   },
 
