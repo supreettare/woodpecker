@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Woodpecker Trainer</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🪵</text></svg>" />
+  <link rel="stylesheet" href="./css/styles.css" />
+</head>
+<body>
+  <div id="flash" class="flash"></div>
+
+  <!-- ============================ LIBRARY ============================ -->
+  <section class="screen active" data-screen="library">
+    <header class="topbar">
+      <div class="brand">
+        <span class="logo">🪵🔨</span>
+        <div>
+          <h1>Woodpecker Trainer</h1>
+          <p class="tagline">Solve the set. Repeat it faster. Burn the patterns in.</p>
+        </div>
+      </div>
+    </header>
+
+    <main class="container">
+      <div class="col-main">
+        <h2 class="section-h">Your puzzle sets</h2>
+        <div id="set-list" class="set-list"></div>
+      </div>
+
+      <aside class="col-side">
+        <div class="panel">
+          <h3>Add puzzles</h3>
+          <p class="muted small">
+            Import your own puzzle file. Supported: <b>JSON</b> (native format),
+            <b>CSV</b> (Lichess puzzle export), or <b>PGN</b> (games/puzzles with FEN tags).
+          </p>
+          <label class="btn primary block">
+            Import puzzle file
+            <input id="file-input" type="file" accept=".json,.csv,.pgn,.txt" hidden />
+          </label>
+          <button id="load-sample" class="btn block">Load sample set</button>
+        </div>
+
+        <div class="panel">
+          <h3>Training options</h3>
+          <label class="field">
+            <span>Per-puzzle time limit (seconds, 0 = none)</span>
+            <input id="set-limit" type="number" min="0" step="10" value="0" />
+          </label>
+          <label class="check">
+            <input id="set-retry" type="checkbox" checked />
+            <span>Allow retry after a wrong move</span>
+          </label>
+          <label class="check">
+            <input id="set-explain" type="checkbox" checked />
+            <span>Show explanations after each puzzle</span>
+          </label>
+        </div>
+
+        <div class="panel">
+          <h3>Backup</h3>
+          <p class="muted small">Progress is stored on this device. Back it up or move it to another device.</p>
+          <button id="export-all" class="btn block">Export backup</button>
+          <label class="btn block">
+            Restore backup
+            <input id="import-backup" type="file" accept=".json" hidden />
+          </label>
+        </div>
+      </aside>
+    </main>
+  </section>
+
+  <!-- ============================ TRAINER ============================ -->
+  <section class="screen" data-screen="trainer">
+    <header class="topbar trainer-bar">
+      <button id="quit-cycle" class="btn ghost">← Library</button>
+      <div class="trainer-heading">
+        <h2 id="trainer-title">Set</h2>
+        <span id="cycle-label" class="pill">Cycle 1</span>
+      </div>
+      <div class="cycle-clock">
+        <span class="clock-label">Cycle time</span>
+        <span id="cycle-timer" class="clock">0:00</span>
+      </div>
+    </header>
+
+    <main class="trainer-layout">
+      <div class="board-wrap">
+        <div id="board"></div>
+        <div id="puzzle-timer" class="puzzle-timer"></div>
+      </div>
+
+      <aside class="trainer-side">
+        <div class="progress">
+          <div class="progress-top">
+            <span id="progress-label">Puzzle 1 / 1</span>
+            <span id="score-label">Solved 0</span>
+          </div>
+          <div class="progress-bar"><div id="progress-bar-fill" class="progress-bar-fill"></div></div>
+        </div>
+
+        <div class="puzzle-meta">
+          <span id="side-to-move" class="side-to-move">White to move</span>
+          <span id="puzzle-theme" class="theme">—</span>
+          <span id="puzzle-rating" class="rating"></span>
+        </div>
+
+        <div id="feedback" class="feedback"></div>
+        <div id="explanation" class="explanation hidden"></div>
+        <div id="control-slot" class="control-slot"></div>
+
+        <p class="muted small hint-note">
+          Drag or tap-tap to move. Play the best move for the side on turn.
+        </p>
+      </aside>
+    </main>
+  </section>
+
+  <!-- ============================ MODAL ============================ -->
+  <div id="modal" class="modal hidden">
+    <div class="modal-card">
+      <div id="modal-body"></div>
+    </div>
+  </div>
+
+  <script type="module" src="./js/app.js"></script>
+</body>
+</html>

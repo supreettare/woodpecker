@@ -1,0 +1,54 @@
+{
+  "name": "Sample Tactics (starter set)",
+  "description": "A small, verified starter set so the trainer works out of the box. Replace it by importing your own puzzle book. These positions are generic teaching examples, not from any published book.",
+  "puzzles": [
+    {
+      "id": "sample-1",
+      "fen": "6k1/5ppp/8/8/8/8/8/R6K w - - 0 1",
+      "solution": ["a1a8"],
+      "sideFirst": "solver",
+      "theme": "Back-rank mate",
+      "explanation": "Ra8# is checkmate on the 8th rank. The black king is boxed in by its own f7/g7/h7 pawns and has no escape and nothing to block with."
+    },
+    {
+      "id": "sample-2",
+      "fen": "6k1/5ppp/8/8/8/8/5PPP/4Q1K1 w - - 0 1",
+      "solution": ["e1e8"],
+      "sideFirst": "solver",
+      "theme": "Back-rank mate",
+      "explanation": "Qe8# sweeps the whole 8th rank. Same pawn-cage idea as the rook mate, but with the queen."
+    },
+    {
+      "id": "sample-3",
+      "fen": "6k1/P4ppp/8/8/8/8/5PPP/6K1 w - - 0 1",
+      "solution": ["a7a8q"],
+      "sideFirst": "solver",
+      "theme": "Promotion",
+      "explanation": "a8=Q promotes the pawn to a new queen, winning decisive material. When a passed pawn reaches the last rank, always look at promoting first."
+    },
+    {
+      "id": "sample-4",
+      "fen": "k7/pp6/4q3/3N4/8/8/8/6K1 w - - 0 1",
+      "solution": ["d5c7"],
+      "sideFirst": "solver",
+      "theme": "Knight fork",
+      "explanation": "Nc7+ is a royal fork: it checks the king on a8 and simultaneously attacks the queen on e6. After the king moves, Nxe6 wins the queen."
+    },
+    {
+      "id": "sample-5",
+      "fen": "6k1/5ppp/8/8/8/7q/5PPP/R5K1 w - - 0 1",
+      "solution": ["a1a8", "h3c8", "a8c8"],
+      "sideFirst": "solver",
+      "theme": "Back-rank mate in 2",
+      "explanation": "1.Ra8+ forces 1...Qc8 (the only way to block the check), and 2.Rxc8# finishes on the back rank. A classic deflection-free back-rank mate in two."
+    },
+    {
+      "id": "sample-6",
+      "fen": "6k1/pp3ppp/8/8/8/8/PP3PPP/2r1R1K1 w - - 0 1",
+      "solution": ["e1c1"],
+      "sideFirst": "solver",
+      "theme": "Winning material",
+      "explanation": "Rxc1 simply wins the black rook that wandered onto c1, since it was undefended. Always check for hanging pieces before anything fancy."
+    }
+  ]
+}

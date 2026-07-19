@@ -1,0 +1,580 @@
+// UI orchestration: wires the board, importer, storage, and session engine
+// together and renders the two screens (Library + Trainer).
+
+import { Board } from './board.js';
+import { parseFile } from './import.js';
+import { store } from './storage.js';
+import { Session, fmtTime } from './trainer.js';
+
+const $ = (sel, root = document) => root.querySelector(sel);
+const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
+const el = (tag, cls, text) => {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text != null) e.textContent = text;
+  return e;
+};
+
+let board;
+let session = null;
+let activeSetId = null;
+let puzzleTimer = null;
+let puzzleDeadline = 0;
+let cycleTicker = null;
+
+// ---------------------------------------------------------------------------
+// Boot
+// ---------------------------------------------------------------------------
+function boot() {
+  board = new Board($('#board'), { onMove });
+  board.setPosition('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1');
+  bindLibraryControls();
+  renderLibrary();
+  showScreen('library');
+}
+
+function showScreen(name) {
+  $$('.screen').forEach((s) => s.classList.toggle('active', s.dataset.screen === name));
+}
+
+// ---------------------------------------------------------------------------
+// Library screen
+// ---------------------------------------------------------------------------
+function bindLibraryControls() {
+  $('#file-input').addEventListener('change', onFilePicked);
+  $('#load-sample').addEventListener('click', loadSample);
+  $('#export-all').addEventListener('click', exportBackup);
+  $('#import-backup').addEventListener('change', importBackup);
+
+  // Settings
+  const s = store.getSettings();
+  $('#set-limit').value = s.perPuzzleLimitSec;
+  $('#set-retry').checked = s.allowRetry;
+  $('#set-explain').checked = s.showExplanations;
+  $('#set-limit').addEventListener('change', (e) =>
+    store.saveSettings({ perPuzzleLimitSec: Math.max(0, parseInt(e.target.value, 10) || 0) }));
+  $('#set-retry').addEventListener('change', (e) =>
+    store.saveSettings({ allowRetry: e.target.checked }));
+  $('#set-explain').addEventListener('change', (e) =>
+    store.saveSettings({ showExplanations: e.target.checked }));
+}
+
+function renderLibrary() {
+  const wrap = $('#set-list');
+  wrap.innerHTML = '';
+  const sets = store.listSets();
+  if (!sets.length) {
+    wrap.appendChild(el('p', 'muted', 'No puzzle sets yet. Import a file or load the sample set to begin.'));
+    return;
+  }
+  for (const meta of sets) {
+    const prog = store.getProgress(meta.id);
+    const cycles = prog.cycles || [];
+    const last = cycles[cycles.length - 1];
+    const best = cycles.reduce((b, c) => (b == null || c.totalMs < b.totalMs ? c.totalMs : b), null);
+
+    const card = el('div', 'card');
+    const head = el('div', 'card-head');
+    head.appendChild(el('h3', null, meta.name));
+    head.appendChild(el('span', 'pill', `${meta.count} puzzles`));
+    card.appendChild(head);
+
+    const stats = el('div', 'card-stats');
+    stats.appendChild(stat('Cycles done', String(cycles.length)));
+    stats.appendChild(stat('Best time', best != null ? fmtTime(best) : '—'));
+    stats.appendChild(stat('Last accuracy', last ? Math.round(last.accuracy * 100) + '%' : '—'));
+    card.appendChild(stats);
+
+    if (cycles.length > 1) card.appendChild(speedChart(cycles));
+
+    const actions = el('div', 'card-actions');
+    const startBtn = el('button', 'btn primary', prog.current ? 'Resume cycle' : `Start cycle ${cycles.length + 1}`);
+    startBtn.addEventListener('click', () => startCycle(meta.id));
+    actions.appendChild(startBtn);
+
+    const histBtn = el('button', 'btn', 'History');
+    histBtn.addEventListener('click', () => showHistory(meta));
+    actions.appendChild(histBtn);
+
+    const delBtn = el('button', 'btn danger', 'Delete');
+    delBtn.addEventListener('click', () => {
+      if (confirm(`Delete "${meta.name}" and its progress?`)) { store.deleteSet(meta.id); renderLibrary(); }
+    });
+    actions.appendChild(delBtn);
+    card.appendChild(actions);
+    wrap.appendChild(card);
+  }
+}
+
+function stat(label, value) {
+  const d = el('div', 'stat');
+  d.appendChild(el('div', 'stat-value', value));
+  d.appendChild(el('div', 'stat-label', label));
+  return d;
+}
+
+// Tiny inline SVG line chart of total time per cycle (the speed-up curve).
+function speedChart(cycles) {
+  const w = 260, h = 70, pad = 6;
+  const times = cycles.map((c) => c.totalMs);
+  const max = Math.max(...times), min = Math.min(...times);
+  const span = max - min || 1;
+  const pts = times.map((t, i) => {
+    const x = pad + (i * (w - 2 * pad)) / Math.max(1, times.length - 1);
+    const y = pad + (1 - (t - min) / span) * (h - 2 * pad);
+    return [x, y];
+  });
+  const path = pts.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join(' ');
+  const svg = `<svg viewBox="0 0 ${w} ${h}" class="spark" role="img" aria-label="Time per cycle">
+    <polyline points="${pts.map((p) => p.join(',')).join(' ')}" fill="none" class="spark-line"/>
+    ${pts.map((p) => `<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="2.5" class="spark-dot"/>`).join('')}
+  </svg>`;
+  const box = el('div', 'chart');
+  box.innerHTML = svg + `<div class="chart-cap">Time per cycle — lower is faster (${fmtTime(max)} → ${fmtTime(times[times.length - 1])})</div>`;
+  return box;
+}
+
+// ---------------------------------------------------------------------------
+// Import
+// ---------------------------------------------------------------------------
+async function onFilePicked(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  try {
+    const text = await file.text();
+    const parsed = parseFile(file.name, text);
+    const name = prompt('Name this puzzle set:', parsed.name || file.name) || parsed.name || file.name;
+    const id = 'set-' + Math.random().toString(36).slice(2, 9);
+    store.addSet({ id, name, puzzles: parsed.puzzles });
+    renderLibrary();
+    flash(`Imported ${parsed.puzzles.length} puzzles into "${name}".`);
+  } catch (err) {
+    alert('Could not import that file:\n\n' + err.message);
+  } finally {
+    e.target.value = '';
+  }
+}
+
+async function loadSample() {
+  try {
+    const res = await fetch('./data/sample-puzzles.json');
+    const text = await res.text();
+    const parsed = parseFile('sample-puzzles.json', text);
+    const id = 'set-sample';
+    store.addSet({ id, name: parsed.name, puzzles: parsed.puzzles });
+    renderLibrary();
+    flash(`Loaded ${parsed.puzzles.length} sample puzzles.`);
+  } catch (err) {
+    alert('Could not load sample: ' + err.message);
+  }
+}
+
+function exportBackup() {
+  const dump = store.exportAll();
+  const blob = new Blob([JSON.stringify(dump, null, 2)], { type: 'application/json' });
+  const a = el('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'woodpecker-backup.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+async function importBackup(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  try {
+    store.importAll(JSON.parse(await file.text()));
+    renderLibrary();
+    flash('Backup restored.');
+  } catch (err) {
+    alert('Could not restore backup: ' + err.message);
+  } finally {
+    e.target.value = '';
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Trainer screen
+// ---------------------------------------------------------------------------
+function startCycle(setId) {
+  activeSetId = setId;
+  const puzzles = store.getPuzzles(setId);
+  if (!puzzles.length) { alert('This set has no puzzles.'); return; }
+  const settings = store.getSettings();
+  const ordered = settings.shuffle ? shuffle(puzzles.slice()) : puzzles.slice();
+  session = new Session(ordered, settings);
+
+  const meta = store.getSet(setId);
+  const prog = store.getProgress(setId);
+  $('#trainer-title').textContent = meta.name;
+  $('#cycle-label').textContent = `Cycle ${(prog.cycles.length || 0) + 1}`;
+
+  showScreen('trainer');
+  startCycleTicker();
+  loadCurrentPuzzle();
+}
+
+function startCycleTicker() {
+  clearInterval(cycleTicker);
+  const start = performance.now();
+  cycleTicker = setInterval(() => {
+    // Show accumulated puzzle time + time on the active puzzle.
+    const done = session.results.reduce((a, r) => a + r.ms, 0);
+    const live = session.solved ? 0 : performance.now() - session._puzzleStart;
+    $('#cycle-timer').textContent = fmtTime(done + live);
+  }, 200);
+}
+
+function loadCurrentPuzzle() {
+  clearFeedback();
+  board.clearMarks();
+  board.setInteractive(false);
+  const info = session.startPuzzle();
+  const p = session.current;
+
+  $('#progress-label').textContent = `Puzzle ${session.number} / ${session.total}`;
+  $('#progress-bar-fill').style.width = ((session.number - 1) / session.total * 100) + '%';
+  $('#score-label').textContent = `Solved ${session.results.filter((r) => r.correct).length}`;
+  $('#puzzle-theme').textContent = p.theme || '—';
+  $('#puzzle-rating').textContent = p.rating ? `Rating ${p.rating}` : '';
+
+  board.setOrientation(info.orientation);
+  board.setPosition(info.fen);
+
+  const toMove = info.sideToMove === 'w' ? 'White' : 'Black';
+  $('#side-to-move').textContent = `${toMove} to move`;
+  $('#side-to-move').className = 'side-to-move ' + (info.sideToMove === 'w' ? 'white' : 'black');
+
+  const go = () => {
+    board.clearMarks();
+    if (info.setupMove) board.markLastMove(info.setupMove.from, info.setupMove.to);
+    board.setInteractive(true);
+    // Start the clock when the learner actually gets control, so the setup
+    // animation delay isn't charged to them.
+    session._puzzleStart = performance.now();
+    armPuzzleTimer();
+  };
+  if (info.setupMove) {
+    // Briefly show the setup move landing before handing over control.
+    setTimeout(go, 500);
+  } else {
+    go();
+  }
+}
+
+function armPuzzleTimer() {
+  clearInterval(puzzleTimer);
+  const limit = store.getSettings().perPuzzleLimitSec;
+  const box = $('#puzzle-timer');
+  if (!limit) { box.textContent = ''; box.classList.remove('warn'); return; }
+  puzzleDeadline = performance.now() + limit * 1000;
+  const tick = () => {
+    const left = Math.max(0, puzzleDeadline - performance.now());
+    box.textContent = 'Time left: ' + fmtTime(left);
+    box.classList.toggle('warn', left < 10000);
+    if (left <= 0) {
+      clearInterval(puzzleTimer);
+      onTimeout();
+    }
+  };
+  tick();
+  puzzleTimer = setInterval(tick, 200);
+}
+
+async function onMove(from, to) {
+  if (!session || session.solved) return;
+  // Handle promotion choice if needed.
+  let promotion;
+  if (session.needsPromotion(from, to)) {
+    promotion = await askPromotion(session.solverColor);
+    if (!promotion) return;
+  }
+  const res = session.tryMove(from, to, promotion);
+  handleResult(res, from, to);
+}
+
+// Floating piece picker shown over the board for pawn promotions.
+function askPromotion(color) {
+  return new Promise((resolve) => {
+    const wrap = $('.board-wrap');
+    const old = $('#promo-picker'); if (old) old.remove();
+    const picker = el('div', 'promo-picker'); picker.id = 'promo-picker';
+    const glyphs = { q: '♛', r: '♜', b: '♝', n: '♞' };
+    ['q', 'r', 'b', 'n'].forEach((pc) => {
+      const b = el('button', 'promo-btn ' + (color === 'w' ? 'cb-white' : 'cb-black'), glyphs[pc]);
+      b.title = { q: 'Queen', r: 'Rook', b: 'Bishop', n: 'Knight' }[pc];
+      b.addEventListener('click', () => { picker.remove(); resolve(pc); });
+      picker.appendChild(b);
+    });
+    const cancel = el('button', 'promo-cancel', '✕');
+    cancel.addEventListener('click', () => { picker.remove(); resolve(null); });
+    picker.appendChild(cancel);
+    wrap.appendChild(picker);
+  });
+}
+
+function handleResult(res, from, to) {
+  if (res.status === 'illegal') return; // silently ignore illegal drops
+
+  if (res.status === 'progress') {
+    board.clearMarks();
+    board.setPosition(session.game.fen());
+    if (res.reply) board.markLastMove(res.reply.from, res.reply.to);
+    feedback('good', 'Correct — keep going.');
+    return;
+  }
+
+  if (res.status === 'solved') {
+    clearInterval(puzzleTimer);
+    board.clearMarks();
+    board.setPosition(session.game.fen());
+    if (res.reply) board.markLastMove(res.reply.from, res.reply.to);
+    board.mark(to, 'cb-good');
+    board.setInteractive(false);
+    const first = session.results[session.results.length - 1];
+    const clean = first && first.correct;
+    feedback('good', clean ? '✅ Solved!' : '✅ Solved (after a slip).');
+    showExplanation();
+    showContinue();
+    return;
+  }
+
+  if (res.status === 'wrong') {
+    board.mark(to, 'cb-bad');
+    setTimeout(() => board.clearMarks(), 500);
+    board.setPosition(session.game.fen()); // revert the illegal-for-solution move
+    const msg = `✗ ${res.playedSan} isn't the solution here.`;
+    if (res.canRetry) {
+      feedback('bad', msg + ' Try again, or reveal the answer.');
+      showRevealButton();
+    } else {
+      feedback('bad', msg);
+      doReveal();
+    }
+  }
+}
+
+function onTimeout() {
+  session.timeout();
+  board.setInteractive(false);
+  feedback('bad', '⏱ Time up.');
+  doReveal();
+}
+
+// Step through the solution on the board, then let the learner continue.
+function doReveal() {
+  clearInterval(puzzleTimer);
+  const line = session.reveal();
+  board.setInteractive(false);
+  let i = 0;
+  const step = () => {
+    if (i >= line.length) {
+      showExplanation();
+      showContinue();
+      return;
+    }
+    const uci = line[i++];
+    const mv = session.game.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] });
+    board.clearMarks();
+    board.setPosition(session.game.fen());
+    if (mv) board.markLastMove(mv.from, mv.to);
+    setTimeout(step, 650);
+  };
+  feedback('bad', 'Here is the solution line:');
+  step();
+}
+
+function showExplanation() {
+  if (!store.getSettings().showExplanations) return;
+  const p = session.current;
+  if (!p.explanation) return;
+  const box = $('#explanation');
+  box.textContent = p.explanation;
+  box.classList.remove('hidden');
+}
+
+// ---------------------------------------------------------------------------
+// Feedback + controls
+// ---------------------------------------------------------------------------
+function feedback(kind, text) {
+  const box = $('#feedback');
+  box.className = 'feedback ' + kind;
+  box.textContent = text;
+}
+function clearFeedback() {
+  $('#feedback').className = 'feedback';
+  $('#feedback').textContent = '';
+  $('#explanation').classList.add('hidden');
+  $('#explanation').textContent = '';
+  $('#control-slot').innerHTML = '';
+}
+
+function showRevealButton() {
+  const slot = $('#control-slot');
+  slot.innerHTML = '';
+  const b = el('button', 'btn', 'Reveal answer');
+  b.addEventListener('click', doReveal);
+  slot.appendChild(b);
+}
+
+function showContinue() {
+  const slot = $('#control-slot');
+  slot.innerHTML = '';
+  const b = el('button', 'btn primary', session.hasNext() ? 'Next puzzle →' : 'Finish cycle');
+  b.addEventListener('click', advance);
+  slot.appendChild(b);
+  // keyboard: Enter / space to continue
+  b.focus();
+}
+
+function advance() {
+  const more = session.next();
+  $('#progress-bar-fill').style.width = (session.index / session.total * 100) + '%';
+  if (more) {
+    loadCurrentPuzzle();
+  } else {
+    finishCycle();
+  }
+}
+
+function finishCycle() {
+  clearInterval(cycleTicker);
+  clearInterval(puzzleTimer);
+  const summary = session.summary();
+  const prog = store.getProgress(activeSetId);
+  prog.cycles = prog.cycles || [];
+  prog.cycles.push(summary);
+  prog.current = null;
+  store.saveProgress(activeSetId, prog);
+  showCycleResult(summary, prog.cycles);
+}
+
+// ---------------------------------------------------------------------------
+// Cycle result overlay
+// ---------------------------------------------------------------------------
+function showCycleResult(summary, cycles) {
+  const prev = cycles.length > 1 ? cycles[cycles.length - 2] : null;
+  const modal = $('#modal');
+  const body = $('#modal-body');
+  body.innerHTML = '';
+  body.appendChild(el('h2', null, `Cycle ${cycles.length} complete`));
+
+  const grid = el('div', 'result-grid');
+  grid.appendChild(stat('Total time', fmtTime(summary.totalMs)));
+  grid.appendChild(stat('Solved clean', `${summary.correct}/${summary.total}`));
+  grid.appendChild(stat('Accuracy', Math.round(summary.accuracy * 100) + '%'));
+  if (prev) {
+    const delta = prev.totalMs - summary.totalMs;
+    const faster = delta > 0;
+    grid.appendChild(stat(faster ? 'Faster by' : 'Slower by',
+      (faster ? '−' : '+') + fmtTime(Math.abs(delta))));
+  }
+  body.appendChild(grid);
+
+  if (cycles.length > 1) {
+    body.appendChild(el('h3', 'section-h', 'Your speed-up across cycles'));
+    body.appendChild(speedChart(cycles));
+  }
+
+  // Slowest / missed puzzles to focus on next time.
+  const missed = summary.perPuzzle.filter((r) => !r.correct);
+  if (missed.length) {
+    body.appendChild(el('h3', 'section-h', `Missed this cycle (${missed.length})`));
+    const ul = el('ul', 'miss-list');
+    missed.slice(0, 12).forEach((r) => {
+      const p = session.puzzles.find((x) => x.id === r.id);
+      ul.appendChild(el('li', null, `${p ? (p.theme || p.id) : r.id} — ${fmtTime(r.ms)}${r.revealed ? ' (revealed)' : ''}`));
+    });
+    body.appendChild(ul);
+  } else {
+    body.appendChild(el('p', 'all-clean', '🎉 Clean sweep — every puzzle solved first try!'));
+  }
+
+  const actions = el('div', 'modal-actions');
+  const again = el('button', 'btn primary', 'Run this set again (next cycle)');
+  again.addEventListener('click', () => { closeModal(); startCycle(activeSetId); });
+  const home = el('button', 'btn', 'Back to library');
+  home.addEventListener('click', () => { closeModal(); renderLibrary(); showScreen('library'); });
+  actions.appendChild(again);
+  actions.appendChild(home);
+  body.appendChild(actions);
+
+  modal.classList.remove('hidden');
+}
+
+function showHistory(meta) {
+  const prog = store.getProgress(meta.id);
+  const cycles = prog.cycles || [];
+  const modal = $('#modal');
+  const body = $('#modal-body');
+  body.innerHTML = '';
+  body.appendChild(el('h2', null, `${meta.name} — history`));
+  if (!cycles.length) {
+    body.appendChild(el('p', 'muted', 'No cycles completed yet.'));
+  } else {
+    if (cycles.length > 1) body.appendChild(speedChart(cycles));
+    const table = el('table', 'hist');
+    table.innerHTML = '<thead><tr><th>#</th><th>Date</th><th>Time</th><th>Accuracy</th></tr></thead>';
+    const tb = el('tbody');
+    cycles.forEach((c, i) => {
+      const tr = el('tr');
+      tr.innerHTML =
+        `<td>${i + 1}</td>` +
+        `<td>${new Date(c.finishedAt).toLocaleDateString()}</td>` +
+        `<td>${fmtTime(c.totalMs)}</td>` +
+        `<td>${Math.round(c.accuracy * 100)}%</td>`;
+      tb.appendChild(tr);
+    });
+    table.appendChild(tb);
+    body.appendChild(table);
+  }
+  const actions = el('div', 'modal-actions');
+  const close = el('button', 'btn', 'Close');
+  close.addEventListener('click', closeModal);
+  actions.appendChild(close);
+  body.appendChild(actions);
+  modal.classList.remove('hidden');
+}
+
+function closeModal() { $('#modal').classList.add('hidden'); }
+
+// ---------------------------------------------------------------------------
+// Small helpers
+// ---------------------------------------------------------------------------
+function shuffle(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+function flash(msg) {
+  const f = $('#flash');
+  f.textContent = msg;
+  f.classList.add('show');
+  setTimeout(() => f.classList.remove('show'), 2600);
+}
+
+// Quit back to library from within a cycle (progress for the cycle is dropped).
+function bindTrainerNav() {
+  $('#quit-cycle').addEventListener('click', () => {
+    if (confirm('Leave this cycle? Progress for the current (unfinished) cycle will not be saved.')) {
+      clearInterval(cycleTicker);
+      clearInterval(puzzleTimer);
+      renderLibrary();
+      showScreen('library');
+    }
+  });
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  boot();
+  bindTrainerNav();
+  document.addEventListener('keydown', (e) => {
+    if ((e.key === 'Enter' || e.key === ' ') && $('#control-slot').firstChild) {
+      // let the focused button handle it; nothing extra needed
+    }
+    if (e.key === 'Escape' && !$('#modal').classList.contains('hidden')) closeModal();
+  });
+});
