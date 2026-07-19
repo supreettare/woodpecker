@@ -3,11 +3,9 @@
 // reports attempted moves (from -> to) to a callback. Rule checking is the
 // caller's job (we use chess.js for that).
 
-const FILES = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
+import { pieceSVG } from './pieces.js';
 
-// Solid glyphs for both colors; color is applied via CSS so white and black
-// pieces look consistent (white = light fill + dark outline).
-const GLYPH = { k: '♚', q: '♛', r: '♜', b: '♝', n: '♞', p: '♟' };
+const FILES = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
 
 export class Board {
   constructor(container, { onMove } = {}) {
@@ -116,7 +114,7 @@ export class Board {
       if (piece) {
         const p = document.createElement('div');
         p.className = 'cb-piece ' + (piece.color === 'w' ? 'cb-white' : 'cb-black');
-        p.textContent = GLYPH[piece.type];
+        p.innerHTML = pieceSVG(piece.type);
         p.dataset.square = sq;
         el.appendChild(p);
       }

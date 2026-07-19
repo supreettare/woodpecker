@@ -2,6 +2,7 @@
 // together and renders the two screens (Library + Trainer).
 
 import { Board } from './board.js';
+import { pieceSVG } from './pieces.js';
 import { parseFile } from './import.js';
 import { store } from './storage.js';
 import { Session, fmtTime } from './trainer.js';
@@ -325,9 +326,9 @@ function askPromotion(color) {
     const wrap = $('.board-wrap');
     const old = $('#promo-picker'); if (old) old.remove();
     const picker = el('div', 'promo-picker'); picker.id = 'promo-picker';
-    const glyphs = { q: '♛', r: '♜', b: '♝', n: '♞' };
     ['q', 'r', 'b', 'n'].forEach((pc) => {
-      const b = el('button', 'promo-btn ' + (color === 'w' ? 'cb-white' : 'cb-black'), glyphs[pc]);
+      const b = el('button', 'promo-btn ' + (color === 'w' ? 'cb-white' : 'cb-black'));
+      b.innerHTML = pieceSVG(pc);
       b.title = { q: 'Queen', r: 'Rook', b: 'Bishop', n: 'Knight' }[pc];
       b.addEventListener('click', () => { picker.remove(); resolve(pc); });
       picker.appendChild(b);
