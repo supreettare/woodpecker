@@ -63,6 +63,28 @@ npx serve .          # or: npx http-server .
 
 ---
 
+## Deploying it online (free)
+
+The app is fully static, so it hosts free on Vercel (Hobby), Netlify, Cloudflare
+Pages, or GitHub Pages. A zero-config `vercel.json` is included.
+
+**Vercel from GitHub (recommended — auto-deploys on every push):**
+1. Go to [vercel.com/new](https://vercel.com/new) and import this repo.
+2. Framework preset: **Other**. Build command: **none**. Output directory:
+   leave blank (root). Deploy.
+3. Set the **Production Branch** to whichever branch holds the code (or merge it
+   to `main` first).
+
+**Vercel from your machine (no GitHub needed):**
+```bash
+npm i -g vercel
+cd woodpecker
+vercel          # preview deploy; follow the login prompt
+vercel --prod   # promote to your production URL
+```
+
+No environment variables or secrets are required — there's no backend.
+
 ## Importing your own puzzle book
 
 Pick whichever format is easiest for the source you have.
